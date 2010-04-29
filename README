@@ -1,0 +1,1 @@
+Incoming requests are provided with document and jquery instances. The document is renderered when sending the response, along with intact jquery handlers.
