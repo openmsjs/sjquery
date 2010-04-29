@@ -14,20 +14,8 @@
  * the License.
  */
 
-/**
-    msjs provides a somewhat faithful DOM representation on the server that
-    can be mainpulated before the page loads. This is  accessed through the
-    global variable "document." It supports most of the regular DOM APIs,
-    enough, at least to convince jQuery that it's working with a proper DOM.
-    Beware, though, that once the page is initially rendered, msjs currently
-    assumes that all subsequent DOM updates happen in the client.
+var sys = require("sys");
 
-    @namespace A DOM tree based on the standard browser document APIs
-    @name document
-*/
-/**#nocode+*/
-
-/*! msjs.server-only **/
 var domElementConstructor = function(){};
 var domelement = domElementConstructor.prototype;
 
@@ -211,40 +199,6 @@ domelement.toJDOM = function(){
 
     var el = new Packages.org.jdom.Element(this.nodeName.toLowerCase(), this.xhtmlNs);
     
-    for (var k in this){
-        if (!this._isAttribute(k)) continue;
-
-        var v = this[k];
-        switch (k){
-            case "_id":
-                el.setAttribute("id", v);
-                break;
-
-            case "style":
-                
-                var style = this.assembleStyle(v);
-                if (style == "") break;
-                el.setAttribute("style", style);
-                break;
-                
-            case "className":
-                el.setAttribute("class", v);
-                break;
-
-            case "checked":
-            case "readOnly":
-            case "disabled":
-                var xAttr = k.toLowerCase();
-                if (v) el.setAttribute(xAttr, xAttr);
-                break;
-
-            default:
-                if (v == null || v === "") continue;
-                el.setAttribute(k, v);
-                break;
-        }
-    }
-
     //now handle children
     var doChildren = true;
     if (this.nodeName == "SCRIPT"){
@@ -406,7 +360,6 @@ document.createTextNode = function(text){
     return d;
 }
 
-var sys = require("sys");
 document._init = function(){
     this._listeners = [];
     this._cookiesIncoming = [];
@@ -488,20 +441,55 @@ var each = function(obj, f){
     }
 }
 
+var ENCODING = "utf-8";
 var render = function(stream, el){
     if (el.nodeType == 3){
         //escaping!
-        stream.write(el.nodeValue);
+        stream.write(xmlEscape(el.nodeValue), ENCODING);
     } else {
-        var tagName =el.nodeName.toLowerCase(); 
-        //TODO: self closing?
-        stream.write("<" + tagName );
+        var tagName =el.nodeName.toLowerCase();
+
+        stream.write("<" + tagName , ENCODING);
+
         for (var k in el){
             if (!isAttribute(el, k)) continue;
-            //escaping!
-            stream.write(" " + k + '=\"' + el[k] + '"');
+
+            var name = k;
+            var value = el[k];
+            var skip =false;
+
+            switch (k){
+                case "_id":
+                    name = "id";
+                    break;
+
+                case "style":
+                    value = assembleStyle(el ,value);
+                    if (style == "") skip = true;
+                    break;
+                    
+                case "className":
+                    name = "class";
+                    break;
+
+                case "checked":
+                case "readOnly":
+                case "disabled":
+                    if (!value) skip = true;
+                    else name = k.toLowerCase();
+                    break;
+
+                default:
+                    if (value == null || value === "") skip = true;
+                    break;
+            }
+
+            if (!skip){
+                stream.write(" " + name + '=\"' + xmlEscape(value) + '"', ENCODING);
+            }
         }
 
+        //TODO: self closing?
         stream.write(">");
 
         each( el.childNodes, function(child){
@@ -510,6 +498,23 @@ var render = function(stream, el){
 
         stream.write("</" + tagName + ">");
     }
+}
+var RE_QUOTE = /\"/g;
+var RE_APOS = /\'/g;
+var RE_LT = /</g;
+var RE_GT = />/g;
+var RE_AMP = /&/g;
+var xmlEscape = function(text){
+    //do this first
+    text = text.replace(RE_AMP, "&amp;");
+
+    text = text.replace(RE_QUOTE, "&quot;");
+    text = text.replace(RE_APOS, "&apos;");
+    text = text.replace(RE_LT, "&lt;");
+    text = text.replace(RE_GT, "&gt;");
+
+    return text;
+
 }
 
 document.renderAsXHTML = function(script){
