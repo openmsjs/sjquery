@@ -2,7 +2,7 @@ var sys = require('sys'),
     http = require('http');
 
 var parseUrl = require('url').parse;
-require.paths.unshift("./js");
+require.paths.unshift("./lib");
 
 var sjquery = require("sjquery");
 http.createServer( function (request, response) {
